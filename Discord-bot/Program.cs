@@ -15,13 +15,13 @@ public class Program
 
     public async Task MainAsync()
     {
+        var token = "YOUR_TOKEN";
         _client = new DiscordSocketClient();
         _commands = new CommandService();
 
         _client.Ready += Client_Ready;
         _client.SlashCommandExecuted += HandleSlashCommand;
 
-        var token = "YOUR_TOKEN";
         await _client.LoginAsync(TokenType.Bot, token);
         await _client.StartAsync();
 
@@ -30,14 +30,21 @@ public class Program
 
     public async Task Client_Ready()
     {
-        var globalCommand = new SlashCommandBuilder();
-        globalCommand.WithName("ping");
-        globalCommand.WithDescription("test ping command");
+        var pingCommand = new SlashCommandBuilder()
+        .WithName("ping")
+        .WithDescription("test ping command");
+
+        var sayCommand = new SlashCommandBuilder()
+        .WithName("say")
+        .WithDescription("i will say what you want")
+        .AddOption("text", ApplicationCommandOptionType.String, "text to say", true);
 
         Console.WriteLine($"{_client.CurrentUser} siap digunakan.");
+        
 
         try {
-            await _client.CreateGlobalApplicationCommandAsync(globalCommand.Build());
+            await _client.CreateGlobalApplicationCommandAsync(pingCommand.Build());
+            await _client.CreateGlobalApplicationCommandAsync(sayCommand.Build());
         } catch (HttpException e) {
             Console.WriteLine(e.ToString());
         }
