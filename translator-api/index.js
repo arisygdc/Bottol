@@ -23,8 +23,6 @@ app.get('/translate', async (req, res) => {
     });
     res.json({"text": result.text});
     console.log(to + ": " + result.text);
-    res.json({"text": text});
-    console.log(to + ": " + text);
 })
 
 app.listen(3000)
