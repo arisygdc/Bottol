@@ -39,12 +39,17 @@ public class Program
         .WithDescription("i will say what you want")
         .AddOption("text", ApplicationCommandOptionType.String, "text to say", true);
 
+        var syntsesisTest = new SlashCommandBuilder()
+        .WithName("syntsesistest")
+        .WithDescription("say \"siapa namamu\" in japanese");
+
         Console.WriteLine($"{_client.CurrentUser} siap digunakan.");
         
 
         try {
             await _client.CreateGlobalApplicationCommandAsync(pingCommand.Build());
             await _client.CreateGlobalApplicationCommandAsync(sayCommand.Build());
+            await _client.CreateGlobalApplicationCommandAsync(syntsesisTest.Build());
         } catch (HttpException e) {
             Console.WriteLine(e.ToString());
         }
