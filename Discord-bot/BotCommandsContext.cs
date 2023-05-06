@@ -31,25 +31,21 @@ public class BotCommandsContext
                 }
                 break;
             case "imagine":
-                var text2imgText = this.cmd.Data.Options.First().Value.ToString();
-                Console.WriteLine(text2imgText);
-                await this.cmd.RespondAsync(text2imgText);
-                var opt = this.cmd.Data.Options.ToDictionary(x => x.Name, x => x.Value);
-                var t2iOpt = new t2iImagineOpt(opt);
+                var opt = this.cmd.Data.Options.ToList();
+                var t2iOpt = new t2iImagineRequest(opt);
 
-                if (text2imgText == null)
-                    await this.cmd.FollowupAsync("text tidak boleh kosong");
+                if (t2iOpt.prompt == string.Empty) {
+                    await this.cmd.RespondAsync("prompt tidak boleh kosong");
+                    break;
+                }
 
-                await this.cmd.FollowupAsync($"promt: {text2imgText}\n" +
-                    $"negative_prompt: {opt["negative_prompt"]}\n" +
-                    $"sampling_steps: {opt["sampling_steps"]}\n" +
-                    $"cfg_scale: {opt["cfg_scale"]}\n" +
-                    $"sampling_method: {opt["sampling_method"]}");
+                await this.cmd.RespondAsync($"promt: {t2iOpt.prompt}\n" +
+                    $"negative_prompt: {t2iOpt.negative_prompt}\n" +
+                    $"sampling_steps: {t2iOpt.steps}\n" +
+                    $"cfg_scale: {t2iOpt.cfg_scale}\n" +
+                    $"sampling_method: {t2iOpt.sampler_index}");
 
-                var (images, seed) = await text2img(
-                    prompt: text2imgText ?? string.Empty, 
-                    negative_prompt: opt["negative_prompt"].ToString() ?? string.Empty, 
-                    opt: t2iOpt);
+                var (images, seed) = await text2img(t2iOpt);
                 foreach (var image in images) {
                     await this.cmd.FollowupWithFileAsync(image, seed + ".png");
                 }
@@ -113,38 +109,39 @@ public class BotCommandsContext
     }
 
     // text to image stable diffusion api
-    private async Task<(List<MemoryStream>, string?)> text2img(string prompt, string negative_prompt, t2iImagineOpt opt) {
+    private async Task<(List<MemoryStream>, string?)> text2img(t2iImagineRequest obj) {
         // stable diffusion text to image api
         var url = "http://localhost:7861/sdapi/v1/txt2img";
         var client = new HttpClient();
-        var obj = new text2imgRequest(
-            prompt: prompt, 
-            negative_prompt: negative_prompt,
-            opt: opt
-        );
 
         string json = JsonConvert.SerializeObject(obj);
-        Console.WriteLine(json);
         var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
         var response = await client.PostAsync(url, content);
         if (!response.IsSuccessStatusCode) 
             throw new Exception("service text2img bejat");
         
         var result = await response.Content.ReadAsStringAsync();
-        Console.WriteLine(result);
         var jsonResult = JsonConvert.DeserializeObject<text2imgResponse>(result);
-        if (jsonResult == null) 
+        if (jsonResult == null)
             throw new Exception("service text2img bejat");
-        
+
+        // info needs deserialize manually
+        var info = JsonConvert.DeserializeObject<t2iInfo>(jsonResult.Info ?? throw new Exception("service text2img bejat"));
+        if (info == null)
+            throw new Exception("service text2img bejat");
+
+        Console.WriteLine("--------------------");
+        Console.WriteLine(jsonResult.Info);
+        Console.WriteLine("--------------------");
         if (jsonResult.Images == null)
             throw new Exception("empty images");
-            
+           
         var images = new List<MemoryStream>();
         foreach (var image in jsonResult.Images) {
             byte[] base64Bytes = Convert.FromBase64String(image);
             images.Add(new MemoryStream(base64Bytes));
         }
 
-        return (images, jsonResult.Info.Seed);
+        return (images, info.Seed ?? "seed");
     }
 }
