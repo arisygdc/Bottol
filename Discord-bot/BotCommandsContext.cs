@@ -9,6 +9,7 @@ public class BotCommandsContext
 
     public async Task CmdAction()
     {
+        Console.WriteLine($"New Command Request: {this.cmd.Data.Name}");
         switch (this.cmd.Data.Name)
         {
             case "ping":
@@ -29,7 +30,27 @@ public class BotCommandsContext
                     Console.WriteLine(e);
                 }
                 break;
-            case "syntsesistest":
+            case "imagine":
+                var opt = this.cmd.Data.Options.ToList();
+                var t2iOpt = new t2iImagineRequest(opt);
+
+                if (t2iOpt.prompt == string.Empty) {
+                    await this.cmd.RespondAsync("prompt tidak boleh kosong");
+                    break;
+                }
+
+                await this.cmd.RespondAsync($"promt: {t2iOpt.prompt}\n" +
+                    $"negative_prompt: {t2iOpt.negative_prompt}\n" +
+                    $"sampling_steps: {t2iOpt.steps}\n" +
+                    $"cfg_scale: {t2iOpt.cfg_scale}\n" +
+                    $"sampling_method: {t2iOpt.sampler_index}");
+
+                var (images, seed) = await text2img(t2iOpt);
+                foreach (var image in images) {
+                    await this.cmd.FollowupWithFileAsync(image, seed + ".png");
+                }
+                break;
+            case "tts-test":
                 var textTest = "あなたの名前は何ですか";
                 await this.cmd.RespondAsync(textTest);
                 try {
@@ -85,5 +106,42 @@ public class BotCommandsContext
             throw new Exception("service synthesis bejat");
         Console.WriteLine(synthesisResponse.StatusCode);
         return await synthesisResponse.Content.ReadAsStreamAsync();
+    }
+
+    // text to image stable diffusion api
+    private async Task<(List<MemoryStream>, string?)> text2img(t2iImagineRequest obj) {
+        // stable diffusion text to image api
+        var url = "http://localhost:7861/sdapi/v1/txt2img";
+        var client = new HttpClient();
+
+        string json = JsonConvert.SerializeObject(obj);
+        var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+        var response = await client.PostAsync(url, content);
+        if (!response.IsSuccessStatusCode) 
+            throw new Exception("service text2img bejat");
+        
+        var result = await response.Content.ReadAsStringAsync();
+        var jsonResult = JsonConvert.DeserializeObject<text2imgResponse>(result);
+        if (jsonResult == null)
+            throw new Exception("service text2img bejat");
+
+        // info needs deserialize manually
+        var info = JsonConvert.DeserializeObject<t2iInfo>(jsonResult.Info ?? throw new Exception("service text2img bejat"));
+        if (info == null)
+            throw new Exception("service text2img bejat");
+
+        Console.WriteLine("--------------------");
+        Console.WriteLine(jsonResult.Info);
+        Console.WriteLine("--------------------");
+        if (jsonResult.Images == null)
+            throw new Exception("empty images");
+           
+        var images = new List<MemoryStream>();
+        foreach (var image in jsonResult.Images) {
+            byte[] base64Bytes = Convert.FromBase64String(image);
+            images.Add(new MemoryStream(base64Bytes));
+        }
+
+        return (images, info.Seed ?? "seed");
     }
 }
